@@ -44,8 +44,8 @@ clear all;
 % 03 – GNSS Velocity Z (ECEF) (m/s)
 
 data = load('2022-05-13_CarData.mat');
-dt = 0.01;          % IMU freq 100Hz
-dt_gnss = 0.1;      % GNSS freq 10Hz
+dt = 1/100;          % IMU freq 100Hz
+dt_gnss = 1/10;      % GNSS freq 10Hz
 init_angle = [0, 0, deg2rad(177)];
 g = 9.8; % just an initial value
 
@@ -61,25 +61,27 @@ data.RawIMU.W(:, 1) = data.RawIMU.W(:, 1) - mean_gx;
 data.RawIMU.W(:, 2) = data.RawIMU.W(:, 2) - mean_gy;
 data.RawIMU.W(:, 3) = data.RawIMU.W(:, 3) - mean_gz;
 
-C = ea2dcm(init_angle);
+% IMU acceleration pre-processing
+g_multiplier = mean(sqrt(sum(data.RawIMU.SF(1:1000, :).^2,2)));
+g_real = comp_gravity(data.RawGNSS.LLA(2, :), "rad");
+g_multiplier = g_real / g_multiplier;
 
-% data.RawGNSS.LLA(:, 1) = deg2rad(data.RawGNSS.LLA(:, 1));
-% data.RawGNSS.LLA(:, 2) = deg2rad(data.RawGNSS.LLA(:, 2));
+C = ea2dcm(init_angle);
 
 position = [[0, 0, 0]];
 velocity = [[0, 0, 0]];
 a_centripetal = [[0, 0, 0]];
 
 angles_acc = [[0, 0]];
-angles_gyro = [[0, 0, 0]];
-angles_gnss = [[0]];
-angles_mechanisation = [[0, 0, 0]];
+angles_gyro = [[0, 0, init_angle(3)]];
+angles_gnss = [[init_angle(3)]];
+angles_mechanisation = [[0, 0, init_angle(3)]];
 
 lla0 = data.RawGNSS.LLA(2, :);
 gps_track = [];
 N = size(data.RawGNSS.LLA, 1);
 
-for i = 1001:N;
+for i = 1:N;
 
     % Calculation of pitch and roll from triaxial accelerometer data
     roll = atan(data.RawIMU.SF(i, 2) / data.RawIMU.SF(1, 3)); % acc angles
@@ -93,7 +95,7 @@ for i = 1001:N;
     if ~isnan(course)
         gps_track(end+1, :) = lla2ned(data.RawGNSS.LLA(i, :).', lla0.');
         if (norm(data.RawGNSS.VEL(i, :)) <= 0.1)
-            angles_gnss(end+1, :) = 0;
+            angles_gnss(end+1, :) = nan;
         else
             angles_gnss(end+1, :) = course;
         end
@@ -107,19 +109,19 @@ for i = 1001:N;
 
     omega = data.RawIMU.W(i, :);
     ac = a_centripetal(end, :).';
-    vp = (C * (data.RawIMU.SF(i, :).' - ac) + [0; 0; g]).';
+    vp = (C * (data.RawIMU.SF(i, :).' * g_multiplier - ac) + [0; 0; g]).';
     pp = velocity(end, :);
     pp(3) = -pp(3);
     Cp = C * sq(omega);
 
-    a_centripetal(end+1, :) = (sq(omega)*(C.' * velocity(end, :).')).';
+    vb = C.' * velocity(end, :).';
+
+    a_centripetal(end+1, :) = (sq(omega) * vb).';
     position(end+1, :) = position(end, :) + pp*dt;
     velocity(end+1, :) = velocity(end, :) + vp*dt;
     C = norm_DCM(C + Cp*dt);
 
-    rpy = dcm2ea(C);
-    % angles_mechanisation(end+1, :) = velocity(end, :);
-    angles_mechanisation(end+1, :) = rpy;
+    angles_mechanisation(end+1, :) = dcm2ea(C); 
 
     % Calculation of pitch, roll and heading by integrating data from gyroscopes.
     % lecture 11, slide 18.
@@ -130,7 +132,7 @@ for i = 1001:N;
          0,  sin(phi)/cos(theta),    cos(phi)/cos(theta)];
 
     om = data.RawIMU.W(i, :);
-    rpy_p = (R * om.').'; % mechanisation angles
+    rpy_p = (R * om.').';
     angles_gyro(end+1, :) = angles_gyro(end, :) + rpy_p*dt;
 
 end
@@ -142,10 +144,10 @@ plot((1:size(angles_acc, 1)) * dt, angles_acc(:, 1))
 hold on
 plot((1:size(angles_mechanisation, 1)) * dt, angles_mechanisation(:, 1))
 hold on
-% plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 1))
-
-xlabel("N")
+plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 1))
+xlabel("Time, [s]")
 ylabel("angle [rad]")
+grid on
 legend("Accelerometer roll", "mechanisation roll", "gyro roll")
 
 subplot(3, 1, 2)
@@ -153,36 +155,44 @@ plot((1:size(angles_acc, 1)) * dt, angles_acc(:, 1))
 hold on
 plot((1:size(angles_mechanisation, 1)) * dt, angles_mechanisation(:, 2))
 hold on
-% plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 2))
-
-xlabel("N")
+plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 2))
+xlabel("Time, [s]")
 ylabel("angle [rad]")
+grid on
 legend("Accelerometer pitch", "mechanisation pitch", "gyro pitch")
 
 subplot(3, 1, 3)
-plot((1:size(angles_gnss, 1)) * dt_gnss, angles_gnss)
+scatter((1:size(angles_gnss, 1)) * dt_gnss, angles_gnss, "*")
 hold on
 plot((1:size(angles_mechanisation, 1)) * dt, angles_mechanisation(:, 3))
 hold on
-% plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 3))
-
+plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 3))
 xlabel("N")
 ylabel("angle [rad]")
+grid on
 legend("gnss course", "mechanisation yaw", "gyro yaw")
 
 
-% figure(2);
-% subplot(3, 1, 1);
-% plot(position(:, 1));
-% hold on
-% plot(gps_track(:, 2));
-% subplot(3, 1, 2);
-% plot(position(:, 2));
-% subplot(3, 1, 3);
-% plot(position(:, 3));
+figure(2);
+subplot(3, 1, 1);
+plot(velocity(:, 1));
+subplot(3, 1, 2);
+hold on
+plot(velocity(:, 2));
+subplot(3, 1, 3);
+plot(velocity(:, 3));
 
-figure(3)
+figure(3);
+subplot(3, 1, 1);
+plot(position(:, 1));
+subplot(3, 1, 2);
+hold on
+plot(position(:, 2));
+subplot(3, 1, 3);
+plot(position(:, 3));
+
+figure(4)
 plot(gps_track(:, 2), gps_track(:, 1));
-% hold on
-% plot(position(:, 2), position(:, 1));
-% grid on
+hold on
+plot(position(:, 2), position(:, 1));
+grid on

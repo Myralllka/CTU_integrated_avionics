@@ -47,8 +47,6 @@ close all;
 data = load('2022-05-13_CarData.mat');
 dt = 1/100;          % IMU freq 100Hz
 dt_gnss = 1/10;      % GNSS freq 10Hz
-g = 9.8; % just an initial value
-
 %%
 
 % Gyro data normalization
@@ -60,9 +58,10 @@ data.RawIMU.W(:, 2) = data.RawIMU.W(:, 2) - mean_gy;
 data.RawIMU.W(:, 3) = data.RawIMU.W(:, 3) - mean_gz;
 
 % IMU acceleration pre-processing
-g_multiplier = mean(sqrt(sum(data.RawIMU.SF(1:1000, :).^2, 2)));
-g_real = comp_gravity(data.RawGNSS.LLA(2, :), "deg");
-g_multiplier = g_real / g_multiplier;
+% g_multiplier = mean(sqrt(sum(data.RawIMU.SF(1:1000, :).^2, 2)));
+g = comp_gravity(data.RawGNSS.LLA(2, :), "deg");
+% g_multiplier = g_multiplier / g;
+
 roll_init_acc = mean(atan(data.RawIMU.SF(1:1000, 2) ./ data.RawIMU.SF(1:1000, 3))); % acc angles
 pitch_init_acc = mean(-atan(data.RawIMU.SF(1:1000, 1) ./ data.RawIMU.SF(1:1000, 3)));
 
@@ -83,7 +82,7 @@ lla0 = deg2rad(data.RawGNSS.LLA(2, :));
 gps_track = [];
 N = size(data.RawGNSS.LLA, 1);
 
-for i = 1:N;
+for i = 1001:N;
 
     % Calculation of pitch and roll from triaxial accelerometer data
     roll = atan(data.RawIMU.SF(i, 2) / data.RawIMU.SF(i, 3)); % acc angles
@@ -111,7 +110,7 @@ for i = 1:N;
 
     omega = data.RawIMU.W(i, :);
     ac = a_centripetal(end, :).';
-    vp = (C * (data.RawIMU.SF(i, :).' * g_multiplier - ac) + [0; 0; g]).';
+    vp = (C * (data.RawIMU.SF(i, :).' * g - ac) + [0; 0; g]).';
     pp = velocity(end, :);
     pp(3) = -pp(3);
     Cp = C * sq(omega);
@@ -216,8 +215,8 @@ xlabel("Time, [s]")
 ylabel("Position N, [m]")
 grid on
 
-% figure(4)
-% plot(gps_track(:, 2), gps_track(:, 1));
-% hold on
-% plot(position(:, 2), position(:, 1));
-% grid on
+figure(4)
+plot(gps_track(:, 2), gps_track(:, 1));
+hold on
+plot(position(:, 2), position(:, 1));
+grid on

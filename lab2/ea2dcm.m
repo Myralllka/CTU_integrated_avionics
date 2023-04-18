@@ -10,7 +10,7 @@ function [res] = ea2dcm(ea)
     spsi = sin(ea(3));
     
     res = [ cthe*cpsi, -cphi*spsi + sphi*sthe*cpsi, sphi*spsi + cphi*sthe*cpsi;
-            cthe*spsi, cphi*cpsi + sphi*sthe*spsi, -sphi * cpsi + cphi*sthe*spsi;
-            -sthe, sphi * cthe, cphi*cthe];
+            cthe*spsi, cphi*cpsi + sphi*sthe*spsi, -sphi*cpsi + cphi*sthe*spsi;
+            -sthe, sphi*cthe, cphi*cthe];
 
 end

@@ -25,7 +25,6 @@ sig = x + noise;
 
 % Values initialisation
 A = [0];
-C = [1];
 
 xk = [0];
 
@@ -37,7 +36,7 @@ R = std(sig)^2 / dt;
 G = [1];
 I = eye(1);
 Fi = [1];
-H = C;
+H = [1];
 inn_array = [0];
 pss_array = [Pk];
 kss_array = [0];

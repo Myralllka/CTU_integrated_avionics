@@ -66,17 +66,17 @@ roll_init_acc = mean(atan(data.RawIMU.SF(1:1000, 2) ./ data.RawIMU.SF(1:1000, 3)
 pitch_init_acc = mean(-atan(data.RawIMU.SF(1:1000, 1) ./ data.RawIMU.SF(1:1000, 3)));
 
 init_angle = [roll_init_acc, pitch_init_acc, deg2rad(177)];
-C = ea2dcm(init_angle);
+Rbn = ea2dcm(init_angle);
 
-position = [[0, 0, 0]];
-velocity = [[0, 0, 0]];
+mech_position = [[0, 0, 0]];
+mech_velocity = [[0, 0, 0]];
 a_centripetal = [[0, 0, 0]];
 
 angles_acc = [[roll_init_acc, pitch_init_acc]];
 angles_gyro = [[roll_init_acc, pitch_init_acc, init_angle(3)]];
 angles_gnss = [[init_angle(3)]];
 
-angles_mechanisation = [[0, 0, 0]];
+mech_angles = [[0, 0, 0]];
 
 lla0 = deg2rad(data.RawGNSS.LLA(2, :));
 gps_track = [];
@@ -110,19 +110,17 @@ for i = 1001:N;
 
     omega = data.RawIMU.W(i, :);
     ac = a_centripetal(end, :).';
-    vp = (C * (data.RawIMU.SF(i, :).' * g - ac) + [0; 0; g]).';
-    pp = velocity(end, :);
+    vp = (Rbn * (data.RawIMU.SF(i, :).' * g - ac) + [0; 0; g]).';
+    pp = mech_velocity(end, :);
     pp(3) = -pp(3);
-    Cp = C * sq(omega);
-
-    vb = C.' * velocity(end, :).';
+    Rbnp = Rbn * sq(omega);
+    vb = Rbn.' * mech_velocity(end, :).';
     a_centripetal(end+1, :) = (sq(omega) * vb).';
+    mech_position(end+1, :) = mech_position(end, :) + pp*dt;
+    mech_velocity(end+1, :) = mech_velocity(end, :) + vp*dt;
+    Rbn = norm_DCM(Rbn + Rbnp*dt);
 
-    position(end+1, :) = position(end, :) + pp*dt;
-    velocity(end+1, :) = velocity(end, :) + vp*dt;
-    C = norm_DCM(C + Cp*dt);
-
-    angles_mechanisation(end+1, :) = dcm2ea(C);
+    mech_angles(end+1, :) = dcm2ea(Rbn);
 
     % Calculation of pitch, roll and heading by integrating data from gyroscopes.
     % lecture 11, slide 18.
@@ -143,7 +141,7 @@ figure(1);
 subplot(3, 1, 1)
 plot((1:size(angles_acc, 1)) * dt, angles_acc(:, 1))
 hold on
-plot((1:size(angles_mechanisation, 1)) * dt, angles_mechanisation(:, 1))
+plot((1:size(mech_angles, 1)) * dt, mech_angles(:, 1))
 hold on
 plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 1))
 title("Angles")
@@ -155,7 +153,7 @@ legend("accelerometer roll", "mechanisation roll", "gyro roll")
 subplot(3, 1, 2)
 plot((1:size(angles_acc, 1)) * dt, angles_acc(:, 2))
 hold on
-plot((1:size(angles_mechanisation, 1)) * dt, angles_mechanisation(:, 2))
+plot((1:size(mech_angles, 1)) * dt, mech_angles(:, 2))
 hold on
 plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 2))
 xlabel("Time, [s]")
@@ -166,7 +164,7 @@ legend("accelerometer pitch", "mechanisation pitch", "gyro pitch")
 subplot(3, 1, 3)
 scatter((1:size(angles_gnss, 1)) * dt_gnss, angles_gnss, "*")
 hold on
-plot((1:size(angles_mechanisation, 1)) * dt, angles_mechanisation(:, 3))
+plot((1:size(mech_angles, 1)) * dt, mech_angles(:, 3))
 hold on
 plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 3))
 xlabel("Time, [s]")
@@ -177,40 +175,40 @@ legend("gnss course", "mechanisation yaw", "gyro yaw")
 
 figure(2);
 subplot(3, 1, 1);
-plot(velocity(:, 1));
+plot(mech_velocity(:, 1));
 title("Velocity in NED")
 ylabel("Velocity N, [m/s]")
 xlabel("Time, [s]")
 grid on
 
 subplot(3, 1, 2);
-plot(velocity(:, 2));
+plot(mech_velocity(:, 2));
 ylabel("Velocity E, [m/s]")
 xlabel("Time, [s]")
 grid on
 
 subplot(3, 1, 3);
-plot(velocity(:, 3));
+plot(mech_velocity(:, 3));
 ylabel("Velocity D, [m/s]")
 xlabel("Time, [s]")
 grid on
 
 figure(3);
 subplot(3, 1, 1);
-plot(position(:, 1));
+plot(mech_position(:, 1));
 xlabel("Time, [s]")
 ylabel("Position N, [m]")
 title("Position, NED")
 grid on
 
 subplot(3, 1, 2);
-plot(position(:, 2));
+plot(mech_position(:, 2));
 xlabel("Time, [s]")
 ylabel("Position N, [m]")
 grid on
 
 subplot(3, 1, 3);
-plot(position(:, 3));
+plot(mech_position(:, 3));
 xlabel("Time, [s]")
 ylabel("Position N, [m]")
 grid on
@@ -218,5 +216,5 @@ grid on
 figure(4)
 plot(gps_track(:, 2), gps_track(:, 1));
 hold on
-plot(position(:, 2), position(:, 1));
+plot(mech_position(:, 2), mech_position(:, 1));
 grid on

@@ -1,5 +1,5 @@
 clear all;
-
+close all;
 % Create an matlab-file to demonstrate Kalman Filtering - 
 % Constant estimation. Matlab-file will have to meet the following points:
 % done - a) Generate a random signal with a defined standard deviation of length 2000

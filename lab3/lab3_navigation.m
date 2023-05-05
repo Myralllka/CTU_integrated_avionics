@@ -127,13 +127,14 @@ x_next = xk(end, :).';
 
 Qc = ones(15, 1);
 Qc(1:3) = 0.5;
-Qc(4:6) = 0.05;
-Qc(7:9) = 0.05;
+Qc(4:6) = 0.001;
+Qc(7:9) = 0.0001;
 Qc(10:12) = 0.0001;
 Qc(13:15) = 0.0001;
 Qc = diag(Qc);
 
-Rk = diag([1.5, 1.5, 1.5, 0.005, 0.005, 0.005])^2;
+
+Rk = diag([1.5, 1.5, 1.5, 0.01, 0.01, 0.01])^2;
 H = [I O O O O; 
      O I O O O];
 Fi = I15 + A*dt;
@@ -285,7 +286,7 @@ grid on
 geobasemap topographic
 title("LLA 2d position (bad precision duew to convertion)")
 
-% Plot 2D positionr
+% Plot 2D NED positionr
 figure(1);
 plot(gps_track(:, 2), gps_track(:, 1));
 hold on

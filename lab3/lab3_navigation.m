@@ -79,13 +79,13 @@ angles_gnss = [[init_angle(3)]];
 
 mech_angles = [[0, 0, 0]];
 
-lla0 = deg2rad(data.RawGNSS.LLA(2, :));
+lla0 = [deg2rad(data.RawGNSS.LLA(2, 1:2)), data.RawGNSS.LLA(2, 3)];
 gps_track = [];
 gps_track_lla = [];
 N = size(data.RawGNSS.LLA, 1);
 
 %% Kalman filter: data fusion
-kalman_position = [[0, 0, 0]];
+kalman_position = [];
 kalman_angles = [[0, 0, 0]];
 kalman_velocity = [[0, 0, 0]];
 kalman_position_lla = [];
@@ -118,6 +118,7 @@ G = [I O O O O;
 I15 = eye(15);
 xk = zeros(1, 15);
 xk_history = zeros(1, 15);
+KINN_history = zeros(1, 15);
 xk(1, 7:9) = init_angle;
 xk(1, 13:15) = mean(data.RawIMU.W(1:1000, :));
 
@@ -246,11 +247,12 @@ for i = 1001:N;
 	end
 	% If GNSS data was received:
     gnss_velocity(end+1, :) = ned_gnss_vel.';
-    gps_track(end+1, :) = lla2ned(deg2rad(data.RawGNSS.LLA(i, :)).', lla0.');
+    % gps_track(end+1, :) = lla2ned(deg2rad(data.RawGNSS.LLA(i, :)).', lla0.')
+    gps_track(end+1, :) = lla2ned([deg2rad(data.RawGNSS.LLA(i, 1:2)).'; data.RawGNSS.LLA(i, 3)], lla0.');
     gps_track_lla(end+1, :) = data.RawGNSS.LLA(i, :).';
 
     % => Compute zk
-    p_gnss = lla2ned(deg2rad(data.RawGNSS.LLA(i, :)).',lla0.');
+    p_gnss = gps_track(end, :).';
     v_gnss = ned_gnss_vel;
     p_mech = mech_position(end, :).';
     v_mech = mech_velocity(end, :).';
@@ -260,7 +262,7 @@ for i = 1001:N;
     inn = (K * inn_array(end, :).').';
     % inn(1:6) = max(inn(1:6), -abs(zk - H * x_next)');
     % inn(1:6) = min(inn(1:6), abs(zk - H * x_next)');
-	% 
+	KINN_history(end + 1, :) = inn;
     xk(end + 1, :) = (x_next + inn.').';
     xk_history(end + 1, :) = xk(end, :);
     bias_acc = bias_acc + xk(end, 10:12);
@@ -286,13 +288,13 @@ grid on
 geobasemap topographic
 title("LLA 2d position (bad precision duew to convertion)")
 
-% Plot 2D NED positionr
+% Plot 2D NED position
 figure(1);
 plot(gps_track(:, 2), gps_track(:, 1));
 hold on
 plot(kalman_position(:, 2), kalman_position(:, 1));
 grid on
-title("NED 2d position")
+title("NED 2d position (better precision)")
 legend("GPS", "Kalman filter")
 
 % Plot state vector history
@@ -305,6 +307,15 @@ for i = 1:15;
      grid on
 end
 
+% Plot K*innovation
+figure(112);
+for i = 1:15;
+     subplot(5, 3, i);
+     plot(KINN_history(:, i));
+     xlabel("Time, [s]");
+     title("K*inn el: " + i);
+     grid on
+end
 
 % Plot position in every axis
 figure(11);
@@ -313,19 +324,25 @@ plot((1:size(gps_track, 1)) * dt_gnss, gps_track(:, 1))
 hold on
 plot((1:size(kalman_position, 1)) * dt, kalman_position(:, 1))
 grid on
-title("Position")
+title("Position NED")
+xlabel("Time, [s]")
+ylabel("Position N, [m]")
 legend("GPS", "Kalman filter")
 subplot(3, 1, 2)
 plot((1:size(gps_track, 1)) * dt_gnss, gps_track(:, 2))
 hold on
 plot((1:size(kalman_position, 1)) * dt, kalman_position(:, 2))
 grid on
+xlabel("Time, [s]")
+ylabel("Position E, [m]")
 legend("GPS", "Kalman filter")
 subplot(3, 1, 3)
 plot((1:size(gps_track, 1)) * dt_gnss, gps_track(:, 3))
 hold on
 plot((1:size(kalman_position, 1)) * dt, kalman_position(:, 3))
 grid on
+xlabel("Time, [s]")
+ylabel("Position D, [m]")
 legend("GPS", "Kalman filter")
 
 % PLOT angles
@@ -333,11 +350,9 @@ figure(2)
 subplot(3, 1, 1)
 plot((1:size(angles_acc, 1)) * dt, angles_acc(:, 1))
 hold on
-plot((1:size(kalman_angles, 1)) * dt, kalman_angles(:, 1))
+plot((1:size(kalman_angles, 1)) * dt, -kalman_angles(:, 1))
 hold on
 plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 1))
-hold on
-plot((1:size(mech_angles, 1)) * dt, mech_angles(:, 1))
 title("Angles")
 xlabel("Time, [s]")
 ylabel("angle [rad]")
@@ -350,8 +365,6 @@ hold on
 plot((1:size(kalman_angles, 1)) * dt, kalman_angles(:, 2))
 hold on
 plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 2))
-hold on
-plot((1:size(mech_angles, 1)) * dt, mech_angles(:, 2))
 xlabel("Time, [s]")
 ylabel("angle [rad]")
 grid on
@@ -363,8 +376,6 @@ hold on
 plot((1:size(kalman_angles, 1)) * dt, kalman_angles(:, 3))
 hold on
 plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 3))
-hold on
-plot((1:size(mech_angles, 1)) * dt, mech_angles(:, 3))
 xlabel("Time, [s]")
 ylabel("angle [rad]")
 grid on

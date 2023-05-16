@@ -165,8 +165,10 @@ for i = 1001:N;
     pss_array(i, :) = diag(Pk);
 
     % Calculation of pitch and roll from triaxial accelerometer data
-    roll = atan(data.RawIMU.SF(i, 2) / data.RawIMU.SF(i, 3)); % acc angles
-    pitch = -atan(data.RawIMU.SF(i, 1) / data.RawIMU.SF(i, 3));
+    % roll = atan(data.RawIMU.SF(i, 2) / data.RawIMU.SF(i, 3)); % acc angles
+    % pitch = -atan(data.RawIMU.SF(i, 1) / data.RawIMU.SF(i, 3));
+    roll = atan2(data.RawIMU.SF(i, 2), sqrt(data.RawIMU.SF(i, 2)^2 + data.RawIMU.SF(i, 3)^2)); % acc angles
+    pitch = atan2(data.RawIMU.SF(i, 1), -data.RawIMU.SF(i, 3));
     angles_acc(end+1, :) = [roll, pitch];
 	
 	% IMU data processing
@@ -272,8 +274,12 @@ for i = 1001:N;
     % P - symetric positive definite!;
     Pk = (I15 - K * H) * P_next * (I15 - K * H)' + K * Rk * K';
     
+    % 
+    mech_position(end, :) = mech_position(end, :) + xk(end, 1:3);
+    mech_velocity(end, :) = mech_velocity(end, :) + xk(end, 4:6);
     % prediction
-    xk(end, 7:end) = 0;
+    % xk(end, 7:end) = 0;
+    xk(end, :) = 0;
 	x_next = Fi*xk(end, :).';
 	P_next = Fi*Pk * Fi' + Qk;
 
@@ -286,7 +292,7 @@ figure(10);
 geoplot(gps_track_lla(:, 1),gps_track_lla(:, 2), kalman_position_lla(:, 1), kalman_position_lla(:, 2))
 grid on
 geobasemap topographic
-title("LLA 2d position (bad precision duew to convertion)")
+title("LLA 2d position (bad precision due to convertion)")
 
 % Plot 2D NED position
 figure(1);
@@ -350,7 +356,7 @@ figure(2)
 subplot(3, 1, 1)
 plot((1:size(angles_acc, 1)) * dt, angles_acc(:, 1))
 hold on
-plot((1:size(kalman_angles, 1)) * dt, -kalman_angles(:, 1))
+plot((1:size(kalman_angles, 1)) * dt, kalman_angles(:, 1))
 hold on
 plot((1:size(angles_gyro, 1)) * dt, angles_gyro(:, 1))
 title("Angles")
@@ -433,6 +439,22 @@ end
 for i = [2 4 6];
      subplot(3, 2, i);
      plot(inn_array(:, i));
+     xlabel("Time, [s]")
+     title("innovation (velocity): " + i)
+     grid on
+end
+
+figure(6)
+for i = [1 3 5];
+     subplot(3, 2, i);
+     histogram(inn_array(:, i));
+     xlabel("Time, [s]")
+     title("innovation (position): " + i)
+     grid on
+end
+for i = [2 4 6];
+     subplot(3, 2, i);
+     histogram(inn_array(:, i));
      xlabel("Time, [s]")
      title("innovation (velocity): " + i)
      grid on
